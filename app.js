@@ -35,11 +35,11 @@ db.once("open", function () {
 async function getToken() {
     let token = await getTokenfromDB()
     if (typeof token != "undefined") {
-        let isExpired = await isTokenExpired(token)
+        let isExpired = isTokenExpired(token)
         if (isExpired == true) {
             let token = fetchToken()
             await DBUpdateToken(token)
-            console.log(token)
+            token.then((token) => console.log(token))
             return token
         } else {
             console.log(token)
@@ -47,10 +47,11 @@ async function getToken() {
         }
     } else {
         console.log("No Token in DB")
-        let token = fetchToken()
-        await DBWriteToken(token)
-        console.log(token)
-        return token
+        let newToken = fetchToken()
+        newToken.then((newToken) => console.log())
+        await DBWriteToken(newToken)
+        newToken.then((newToken) => console.log(newToken))
+        return newToken
     }
 }
 
@@ -60,50 +61,33 @@ async function getToken() {
 async function fetchToken() {
     const response = await fetch(url, { method: 'POST', headers: auth })
     const data = await response.json()
+    //console.log(data)
     const token = data.access_token
+    //console.log(`fetchTOken: ${token}`)
     return token
 }
 
 //Database Functions
 
-//Function to write a new token to the databse on first run
-async function DBWriteToken(token) {
-    const dbtoken = new tokenSchema({
-        token_id: 0,
-        token: token
-    })
-    dbtoken.save(function (err) {
-        if (err) return handleError(err)
-    })
-}
 
-//function to update the token value of the exisitng database DB entry
-async function DBUpdateToken(token) {
-
-    let doc = await tokenSchema.findOneAndUpdate({ token_id: 0 }, { "token": token }, function (err, result) {
-        if (err) {
-            console.log(err)
-        } else {
-            console.log("success")
-        }
-    })
-
-}
 
 //Function to get the token from the database
 async function getTokenfromDB() {
-    let token = await tokenSchema.findOne({ token_id: 0 }).exec()
-    console.log("Getting Token From DB")
-    if (typeof token != undefined) {
+    console.log("getTokenFromDB")
+    try {
+        let token = tokenSchema.findOne({ token_id: 0 }).exec()
+        console.log(`Token in DB is ${token.token}`)
         return token.token
-    } else {
+    } catch (error) {
         return undefined
     }
 }
 
 //function to check if a token is expired
 function isTokenExpired(token) {
+    console.log("isTokenExpired")
     const decodedToken = jwt.decode(token, { complete: true })
+    console.log(decodedToken)
     const currentTime = Date.now().toString().slice(0, -3)
     if (decodedToken.payload.exp < currentTime) {
         console.log("Token is expired")
@@ -116,6 +100,38 @@ function isTokenExpired(token) {
 }
 
 
+//function to update the token value of the exisitng database DB entry
+async function DBUpdateToken(newToken) {
+    console.log("DBUpdateToken")
+    let filter = "{ token_id: 0 }"
+    let update = `{ token: ${newToken}}`
+    let options = { new: true, overwrite: true }
+    let token = await tokenSchema.findOneAndUpdate(filter, update, options)
+        .then((doc) => {
+            console.log(`update oauth token to DB finished! ${doc}`);
+        })
+        .catch(err => {
+            console.log('update oauth token error:', err);
+        });
+    return token;
+}
+
+
+
+async function DBWriteToken(newToken) {
+    console.log("dbWriteToken")
+    data = {
+        token_id: 0,
+        token: "newToken"
+    }
+    try {
+        const doc = new tokenSchema(data)
+        await doc.save()
+        return doc
+    } catch (error) {
+        console.log(error)
+    }
+}
 
 //calling the getToken() function after waiting for the database to connect
 setTimeout(() => { getToken(); }, 3000);
